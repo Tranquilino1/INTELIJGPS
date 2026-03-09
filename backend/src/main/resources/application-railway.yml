@@ -1,9 +1,10 @@
 spring:
   datasource:
-    # Railway provides the full connection string dynamically in either DATABASE_URL or PGURL
-    url: ${DATABASE_PUBLIC_URL:${DATABASE_URL:jdbc:postgresql://localhost:5432/intelijgps}}
-    username: ${PGUSER:postgres}
-    password: ${PGPASSWORD:postgres}
+    # Railway injects DATABASE_URL as postgresql://user:pass@host:port/db
+    # We convert it to JDBC format by setting each part from the PG* variables
+    url: jdbc:postgresql://${PGHOST}:${PGPORT:5432}/${PGDATABASE}
+    username: ${PGUSER}
+    password: ${PGPASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -16,7 +17,7 @@ spring:
     locations: classpath:db/migration/postgresql
     baseline-on-migrate: true
 
-  # Disable Kafka & Redis to run on Railway's minimal setup easily
+  # Disable Kafka & Redis to run on Railway's minimal setup
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
@@ -27,3 +28,13 @@ intelijgps:
   kafka:
     topics:
       traffic-malabo: traffic.malabo
+
+# Expose actuator health endpoint for Railway healthcheck
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
