@@ -45,9 +45,13 @@
     let selectedLandmark = null;
     let selectedSeverity = 1;
 
+    // ── Tile Layers (module-level so layer switcher can access them) ──
+    let darkLayer, lightLayer, satLayer, streetLayer, activeLayer;
+
     // ── Init ──────────────────────────────────────────────────────
     function init() {
         initMap();
+        setupLayerControlButtons(); // wire up the 4 map-mode buttons
         initUserLocation();
         loadLandmarks('Malabo');
         loadActiveTrafficReports();
@@ -72,43 +76,21 @@
     function initMap() {
         const city = CITIES[currentCity];
 
-        // 1. Premium Dark (Default)
-        const darkMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20
-        });
-
-        // 2. Light Map (Positron)
-        const lightMap = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20
-        });
-
-        // 3. Satellite (Esri)
-        const satMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; Esri', maxZoom: 19
-        });
-
-        // 4. Street (OSM)
-        const streetMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OSM', maxZoom: 19
-        });
+        // Define all tile layers at module scope for layer switcher
+        darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 });
+        lightLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd', maxZoom: 20 });
+        satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri', maxZoom: 19 });
+        streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM', maxZoom: 19 });
+        activeLayer = darkLayer; // start dark
 
         map = L.map('map', {
             center: [city.lat, city.lon],
             zoom: city.zoom,
             zoomControl: false,
-            layers: [darkMap] // default mode
+            layers: [darkLayer]
         });
 
-        // Add Layer Control (Multi-modos)
-        const baseMaps = {
-            "🌙 Modo Oscuro (Premium)": darkMap,
-            "☀️ Modo Claro": lightMap,
-            "🛰️ Satélite": satMap,
-            "🗺️ Calles (Estándar)": streetMap
-        };
-        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
-
-        // Custom zoom control position
+        // Custom zoom
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
         // Map click handler (for reporting)
@@ -617,6 +599,41 @@
                 document.querySelectorAll('.sev-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 selectedSeverity = parseInt(btn.dataset.sev);
+            });
+        });
+    }
+
+    // ── Layer Control Buttons ─────────────────────────────────────
+    function setupLayerControlButtons() {
+        const layerMap = {
+            dark: () => darkLayer,
+            light: () => lightLayer,
+            satellite: () => satLayer,
+            streets: () => streetLayer,
+        };
+
+        document.querySelectorAll('.layer-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const key = btn.dataset.tile;
+                const newLayer = layerMap[key] ? layerMap[key]() : darkLayer;
+
+                if (!newLayer) return;
+
+                // Remove old active layer
+                if (activeLayer && map.hasLayer(activeLayer)) {
+                    map.removeLayer(activeLayer);
+                }
+
+                // Add new layer and update state
+                newLayer.addTo(map);
+                activeLayer = newLayer;
+
+                // Update button active state
+                document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const labels = { dark: '🌑 Modo Oscuro', light: '☀️ Modo Claro', satellite: '🛰️ Satélite', streets: '🗺️ Calles' };
+                showToast(labels[key] || 'Mapa cambiado');
             });
         });
     }
