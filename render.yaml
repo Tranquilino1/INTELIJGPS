@@ -37,8 +37,7 @@ services:
           name: intelijgps-db
           property: password
 
-  # ── Database: Managed PostgreSQL (with PostGIS support) ──
-  - type: psql
-    name: intelijgps-db
+databases:
+  - name: intelijgps-db
     plan: free
-    postgresMajorVersion: 16
+    postgresMajorVersion: "16"
