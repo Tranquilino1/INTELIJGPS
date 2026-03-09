@@ -1,0 +1,44 @@
+version: "1"
+
+services:
+  # ── Backend: Spring Boot Docker Web Service ──
+  - type: web
+    name: intelijgps-backend
+    env: docker
+    dockerfilePath: Dockerfile
+    # Render's free tier maxes out at 512MB RAM
+    plan: free
+    healthCheckPath: /actuator/health
+    
+    # Enable the application-render.yml profile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: render
+
+      # ── Database Connection Variables ──
+      - key: DB_HOST
+        fromDatabase:
+          name: intelijgps-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: intelijgps-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: intelijgps-db
+          property: database
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: intelijgps-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: intelijgps-db
+          property: password
+
+  # ── Database: Managed PostgreSQL (with PostGIS support) ──
+  - type: psql
+    name: intelijgps-db
+    plan: free
+    postgresMajorVersion: 16

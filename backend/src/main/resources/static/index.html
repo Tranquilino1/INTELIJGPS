@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTELIJGPS — Navegación Inteligente para Guinea Ecuatorial</title>
+    <meta name="description"
+        content="Sistema de navegación inteligente, diseñado para Guinea Ecuatorial. Navega por hitos, recibe alertas en tiempo real y usa mapas offline.">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <!-- ── Map ──────────────────────────────────────────────────────── -->
+    <div id="map"></div>
+
+    <!-- ── UI Layer ─────────────────────────────────────────────────── -->
+    <div class="ui-layer">
+
+        <!-- ── Top Left Floating Panel (Search & List) ────────────── -->
+        <div class="panel-left">
+            <div class="panel-brand">
+                <div class="brand-flag">🇬🇶</div>
+                <div class="brand-text">INTELIJGPS</div>
+            </div>
+            <div class="panel-content">
+                <div class="review-badge"><span class="check-icon">✓</span> Review</div>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-input" placeholder="Search locations in Malabo..." autocomplete="off">
+                </div>
+                <div class="search-results-mockup" id="search-results">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Bottom Left Floating Panel (Controls) ──────────────── -->
+        <div class="panel-controls">
+            <div class="locate-me" id="btn-locate" onclick="locateMe()">
+                <div class="locate-icon">🎯</div>
+                <div class="locate-text">Locate Me</div>
+            </div>
+            <div class="controls-divider"></div>
+            <div class="city-switcher-container">
+                <span class="city-switcher-title">City Switcher</span>
+                <div class="city-switcher-btns">
+                    <button class="city-btn active" data-city="Malabo" id="btn-malabo">Malabo</button>
+                    <button class="city-btn" data-city="Bata" id="btn-bata">Bata</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Voice Panel (Bottom Center/Right) ──────────────────── -->
+        <div class="panel-voice" id="nav-panel" style="display:flex">
+            <button class="voice-back" id="nav-close">〈</button>
+            <button class="voice-mic" id="btn-voice-toggle">🎤</button>
+            <div class="voice-bubble">
+                <div class="voice-target-icon">
+                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z'/></svg>"
+                        width="14" height="14">
+                </div>
+                <span class="voice-text" id="nav-voice-text">Seleccione un destino en la lista.</span>
+            </div>
+        </div>
+
+
+
+        <!-- ── Report Traffic FAB (Bottom Right) ──────────────────── -->
+        <button class="fab" id="fab-report" title="Reportar incidente de tráfico"
+            onclick="openReportModal()">📍</button>
+
+    </div>
+
+    <!-- ── Report Modal ───────────────────────────────────────────── -->
+    <div class="modal-overlay" id="report-modal" style="display:none" onclick="closeReportModal(event)">
+        <div class="modal-card">
+            <h3 class="modal-title">📍 Reportar Incidente</h3>
+            <div class="form-group">
+                <label>Tipo de Incidente</label>
+                <select id="report-type">
+                    <option value="trafico_pesado">🚗 Tráfico Pesado</option>
+                    <option value="corte_lluvia">🌧️ Corte por Lluvia</option>
+                    <option value="accidente">⚠️ Accidente</option>
+                    <option value="peaje_bloqueado">🚧 Peaje Bloqueado</option>
+                    <option value="obra_vial">🏗️ Obra Vial</option>
+                    <option value="inundacion">🌊 Inundación</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Gravedad</label>
+                <div class="severity-buttons">
+                    <button class="sev-btn active" data-sev="1">🟡 Leve</button>
+                    <button class="sev-btn" data-sev="2">🟠 Moderado</button>
+                    <button class="sev-btn" data-sev="3">🔴 Grave</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Descripción (opcional)</label>
+                <input type="text" id="report-description" placeholder="Ej: Tráfico pesado por zona del puerto">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="submitReport()">📤 Reportar</button>
+                <button class="btn-secondary" onclick="closeReportModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Offline Hint Toast ────────────────────── -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ── Scripts ────────────────────────────────────────────────── -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="/voice.js"></script>
+    <script src="/realtime.js"></script>
+    <script src="/app.js"></script>
+</body>
+
+</html>
