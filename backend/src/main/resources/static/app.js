@@ -8,6 +8,7 @@
 
     const API_BASE = window.location.origin + '/api';
     const LIQ_KEY = 'pk.c8f5113c770108af67ae8d961133dad8'; // LocationIQ publishable key
+    const GH_KEY = '3a84578c-502c-4cdb-8d9c-3ee62ce67849'; // GraphHopper routing key
     const LIQ_BASE = 'https://us1.locationiq.com/v1';
     const LIQ_TILES = 'https://tiles.locationiq.com/v3';
 
@@ -547,22 +548,23 @@
         document.getElementById('search-input').value = `${from.name} → ${to.name}`;
 
         try {
-            const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+            const url = `https://graphhopper.com/api/1/route?point=${from.lat},${from.lon}&point=${to.lat},${to.lon}&vehicle=car&locale=es&key=${GH_KEY}&points_encoded=false`;
             const res = await fetch(url);
             const data = await res.json();
-            if (data.routes && data.routes.length > 0) {
-                const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+            if (data.paths && data.paths.length > 0) {
+                // GraphHopper returns GeoJSON points as [lon, lat], Leaflet wants [lat, lon]
+                const coords = data.paths[0].points.coordinates.map(c => [c[1], c[0]]);
                 if (currentRouteLine) map.removeLayer(currentRouteLine);
                 currentRouteLine = L.polyline(coords, { color: '#00d287', weight: 6, opacity: 0.9, className: 'route-glow-line' }).addTo(map);
                 map.fitBounds(currentRouteLine.getBounds(), { padding: [60, 60] });
-                const km = (data.routes[0].distance / 1000).toFixed(1);
-                const min = Math.round(data.routes[0].duration / 60);
+                const km = (data.paths[0].distance / 1000).toFixed(1);
+                const min = Math.round(data.paths[0].time / 60000); // time is in milliseconds
                 const msg = `📍 ${km} km · aprox. ${min} min de ${from.name} a ${to.name}.`;
                 document.getElementById('nav-voice-text').textContent = msg;
                 VoiceEngine.speak(msg);
                 showToast(`✅ ${km} km · ${min} min`);
             }
-        } catch (e) { console.warn('[routeFromTo] OSRM failed:', e); }
+        } catch (e) { console.warn('[routeFromTo] GraphHopper failed:', e); }
     };
 
     global.quickRoute = function (origin, destination) {
