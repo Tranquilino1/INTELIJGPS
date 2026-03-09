@@ -457,282 +457,283 @@
         }
 
         renderSearchResults(items, results);
+    } // ← closes searchLandmarks
 
-        function renderSearchResults(items, container) {
-            if (!items.length) {
-                container.innerHTML = '<div class="alert-empty" style="color:#1a1a2e;text-align:center;padding:20px;">Sin resultados</div>';
-                container.classList.add('open');
-                return;
-            }
+    function renderSearchResults(items, container) {
+        if (!items.length) {
+            container.innerHTML = '<div class="alert-empty" style="color:#1a1a2e;text-align:center;padding:20px;">Sin resultados</div>';
+            container.classList.add('open');
+            return;
+        }
 
-            container.innerHTML = '';
-            items.slice(0, 8).forEach(item => {
-                const meta = CATEGORY_META[item.category] || CATEGORY_META.default;
-                const div = document.createElement('div');
-                div.className = 'search-result-item';
-                div.innerHTML = `
+        container.innerHTML = '';
+        items.slice(0, 8).forEach(item => {
+            const meta = CATEGORY_META[item.category] || CATEGORY_META.default;
+            const div = document.createElement('div');
+            div.className = 'search-result-item';
+            div.innerHTML = `
                 <div class="result-icon">${meta.emoji}</div>
                 <div>
                     <div class="result-name">${item.name}</div>
                     <div class="result-meta">${item.city} — ${item.category} ${item.verified ? '✅' : ''}</div>
                 </div>
             `;
-                div.addEventListener('click', () => {
-                    container.classList.remove('open');
-                    document.getElementById('search-input').value = item.name;
-                    showLandmarkPanel(item);
-                });
-                container.appendChild(div);
+            div.addEventListener('click', () => {
+                container.classList.remove('open');
+                document.getElementById('search-input').value = item.name;
+                showLandmarkPanel(item);
             });
-            container.classList.add('open');
-        }
+            container.appendChild(div);
+        });
+        container.classList.add('open');
+    }
 
-        // ── City Switcher ─────────────────────────────────────────────
-        function setupCitySwitcher() {
-            document.querySelectorAll('.city-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.city-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    const city = btn.dataset.city;
-                    currentCity = city;
+    // ── City Switcher ─────────────────────────────────────────────
+    function setupCitySwitcher() {
+        document.querySelectorAll('.city-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.city-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const city = btn.dataset.city;
+                currentCity = city;
 
-                    const input = document.getElementById('search-input');
-                    if (input) input.placeholder = `Busca en ${city}... ej: "Hotel" o "de X a Y"`;
+                const input = document.getElementById('search-input');
+                if (input) input.placeholder = `Busca en ${city}... ej: "Hotel" o "de X a Y"`;
 
-                    const cfg = CITIES[city] || CITIES.Malabo;
-                    map.flyTo([cfg.lat, cfg.lon], cfg.zoom, { animate: true, duration: 1.5 });
-                    loadLandmarks(city);
-                });
-            });
-        }
-
-        // ── Geocode by name (LocationIQ) ──────────────────────────────
-        async function geocodeName(name) {
-            // 1. Check local landmarks first (instant)
-            const local = FALLBACK_LANDMARKS.find(l =>
-                l.name.toLowerCase().includes(name.toLowerCase()) ||
-                name.toLowerCase().includes(l.name.toLowerCase().split(' ').slice(0, 2).join(' '))
-            );
-            if (local) return { lat: local.latitude, lon: local.longitude, name: local.name };
-
-            // 2. LocationIQ search (better GQ coverage than Nominatim)
-            try {
-                const url = `${LIQ_BASE}/search?key=${LIQ_KEY}&q=${encodeURIComponent(name)}&countrycodes=gq&format=json&limit=1`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data && data.length > 0) {
-                    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: data[0].display_name.split(',')[0] };
-                }
-            } catch (e) { console.warn('[LocationIQ Geocode]', e); }
-
-            return null;
-        }
-
-        // ── routeFromTo: named origin → destination ───────────────────
-        global.routeFromTo = async function (origin, destination) {
-            showToast(`🔍 Buscando ruta de "${origin}" a "${destination}"...`);
-            const [from, to] = await Promise.all([geocodeName(origin), geocodeName(destination)]);
-            if (!from || !to) { showToast('❌ No encontré alguno de los lugares.'); return; }
-
-            const originIcon = L.divIcon({
-                className: '',
-                html: `<div style="background:#00d287;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px #00d287;"></div>`,
-                iconSize: [14, 14], iconAnchor: [7, 7]
-            });
-            L.marker([from.lat, from.lon], { icon: originIcon }).addTo(map)
-                .bindTooltip(`🟢 ${from.name}`, { permanent: false });
-
-            showLandmarkPanel({ latitude: to.lat, longitude: to.lon, name: to.name, category: 'default', addressHint: destination });
-            document.getElementById('search-input').value = `${from.name} → ${to.name}`;
-
-            try {
-                const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.routes && data.routes.length > 0) {
-                    const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                    if (currentRouteLine) map.removeLayer(currentRouteLine);
-                    currentRouteLine = L.polyline(coords, { color: '#00d287', weight: 6, opacity: 0.9, className: 'route-glow-line' }).addTo(map);
-                    map.fitBounds(currentRouteLine.getBounds(), { padding: [60, 60] });
-                    const km = (data.routes[0].distance / 1000).toFixed(1);
-                    const min = Math.round(data.routes[0].duration / 60);
-                    const msg = `📍 ${km} km · aprox. ${min} min de ${from.name} a ${to.name}.`;
-                    document.getElementById('nav-voice-text').textContent = msg;
-                    VoiceEngine.speak(msg);
-                    showToast(`✅ ${km} km · ${min} min`);
-                }
-            } catch (e) { console.warn('[routeFromTo] OSRM failed:', e); }
-        };
-
-        global.quickRoute = function (origin, destination) {
-            global.routeFromTo(origin, destination);
-        };
-
-        global.clearSearch = function () {
-            const input = document.getElementById('search-input');
-            const results = document.getElementById('search-results');
-            if (input) { input.value = ''; input.focus(); }
-            if (results) results.classList.remove('open');
-        };
-
-        // ── Voice / Lang Toggle ──────────────────────────────────────
-        document.addEventListener('DOMContentLoaded', () => {
-            const voiceBtn = document.getElementById('btn-voice-toggle');
-            if (voiceBtn) voiceBtn.addEventListener('click', () => {
-                const on = VoiceEngine.toggle();
-                voiceBtn.style.background = on ? 'var(--verde-selva)' : '#555';
-                showToast(on ? '🔊 Voz activada' : '🔇 Voz desactivada');
-            });
-
-            const langBtn = document.getElementById('btn-lang-toggle');
-            if (langBtn) langBtn.addEventListener('click', () => {
-                const cur = VoiceEngine.getLang();
-                const next = cur === 'es-GQ' ? 'es' : 'es-GQ';
-                VoiceEngine.setLang(next);
-                showToast(next === 'es-GQ' ? '🇬🇶 Español Ecuatoguineano' : '🇪🇸 Español Estándar');
+                const cfg = CITIES[city] || CITIES.Malabo;
+                map.flyTo([cfg.lat, cfg.lon], cfg.zoom, { animate: true, duration: 1.5 });
+                loadLandmarks(city);
             });
         });
+    }
 
-        // ── Severity Buttons ─────────────────────────────────────────
-        function setupSeverityButtons() {
-            document.querySelectorAll('.sev-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.sev-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    selectedSeverity = parseInt(btn.dataset.sev);
-                });
-            });
-        }
+    // ── Geocode by name (LocationIQ) ──────────────────────────────
+    async function geocodeName(name) {
+        // 1. Check local landmarks first (instant)
+        const local = FALLBACK_LANDMARKS.find(l =>
+            l.name.toLowerCase().includes(name.toLowerCase()) ||
+            name.toLowerCase().includes(l.name.toLowerCase().split(' ').slice(0, 2).join(' '))
+        );
+        if (local) return { lat: local.latitude, lon: local.longitude, name: local.name };
 
-        // ── Layer Control Buttons ─────────────────────────────────────
-        function setupLayerControlButtons() {
-            const layerMap = {
-                dark: () => darkLayer,
-                light: () => lightLayer,
-                satellite: () => satLayer,
-                streets: () => streetLayer,
-            };
-
-            document.querySelectorAll('.layer-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const key = btn.dataset.tile;
-                    const newLayer = layerMap[key] ? layerMap[key]() : darkLayer;
-
-                    if (!newLayer) return;
-
-                    // Remove old active layer
-                    if (activeLayer && map.hasLayer(activeLayer)) {
-                        map.removeLayer(activeLayer);
-                    }
-
-                    // Add new layer and update state
-                    newLayer.addTo(map);
-                    activeLayer = newLayer;
-
-                    // Update button active state
-                    document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-
-                    const labels = { dark: '🌑 Modo Oscuro', light: '☀️ Modo Claro', satellite: '🛰️ Satélite', streets: '🗺️ Calles' };
-                    showToast(labels[key] || 'Mapa cambiado');
-                });
-            });
-        }
-
-        // ── Report Modal ─────────────────────────────────────────────
-        global.openReportModal = function () {
-            document.getElementById('report-modal').style.display = 'flex';
-        };
-
-        global.closeReportModal = function (e) {
-            if (!e || e.target.id === 'report-modal' || !e.target.closest) {
-                document.getElementById('report-modal').style.display = 'none';
+        // 2. LocationIQ search (better GQ coverage than Nominatim)
+        try {
+            const url = `${LIQ_BASE}/search?key=${LIQ_KEY}&q=${encodeURIComponent(name)}&countrycodes=gq&format=json&limit=1`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), name: data[0].display_name.split(',')[0] };
             }
+        } catch (e) { console.warn('[LocationIQ Geocode]', e); }
+
+        return null;
+    }
+
+    // ── routeFromTo: named origin → destination ───────────────────
+    global.routeFromTo = async function (origin, destination) {
+        showToast(`🔍 Buscando ruta de "${origin}" a "${destination}"...`);
+        const [from, to] = await Promise.all([geocodeName(origin), geocodeName(destination)]);
+        if (!from || !to) { showToast('❌ No encontré alguno de los lugares.'); return; }
+
+        const originIcon = L.divIcon({
+            className: '',
+            html: `<div style="background:#00d287;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px #00d287;"></div>`,
+            iconSize: [14, 14], iconAnchor: [7, 7]
+        });
+        L.marker([from.lat, from.lon], { icon: originIcon }).addTo(map)
+            .bindTooltip(`🟢 ${from.name}`, { permanent: false });
+
+        showLandmarkPanel({ latitude: to.lat, longitude: to.lon, name: to.name, category: 'default', addressHint: destination });
+        document.getElementById('search-input').value = `${from.name} → ${to.name}`;
+
+        try {
+            const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.routes && data.routes.length > 0) {
+                const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                if (currentRouteLine) map.removeLayer(currentRouteLine);
+                currentRouteLine = L.polyline(coords, { color: '#00d287', weight: 6, opacity: 0.9, className: 'route-glow-line' }).addTo(map);
+                map.fitBounds(currentRouteLine.getBounds(), { padding: [60, 60] });
+                const km = (data.routes[0].distance / 1000).toFixed(1);
+                const min = Math.round(data.routes[0].duration / 60);
+                const msg = `📍 ${km} km · aprox. ${min} min de ${from.name} a ${to.name}.`;
+                document.getElementById('nav-voice-text').textContent = msg;
+                VoiceEngine.speak(msg);
+                showToast(`✅ ${km} km · ${min} min`);
+            }
+        } catch (e) { console.warn('[routeFromTo] OSRM failed:', e); }
+    };
+
+    global.quickRoute = function (origin, destination) {
+        global.routeFromTo(origin, destination);
+    };
+
+    global.clearSearch = function () {
+        const input = document.getElementById('search-input');
+        const results = document.getElementById('search-results');
+        if (input) { input.value = ''; input.focus(); }
+        if (results) results.classList.remove('open');
+    };
+
+    // ── Voice / Lang Toggle ──────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        const voiceBtn = document.getElementById('btn-voice-toggle');
+        if (voiceBtn) voiceBtn.addEventListener('click', () => {
+            const on = VoiceEngine.toggle();
+            voiceBtn.style.background = on ? 'var(--verde-selva)' : '#555';
+            showToast(on ? '🔊 Voz activada' : '🔇 Voz desactivada');
+        });
+
+        const langBtn = document.getElementById('btn-lang-toggle');
+        if (langBtn) langBtn.addEventListener('click', () => {
+            const cur = VoiceEngine.getLang();
+            const next = cur === 'es-GQ' ? 'es' : 'es-GQ';
+            VoiceEngine.setLang(next);
+            showToast(next === 'es-GQ' ? '🇬🇶 Español Ecuatoguineano' : '🇪🇸 Español Estándar');
+        });
+    });
+
+    // ── Severity Buttons ─────────────────────────────────────────
+    function setupSeverityButtons() {
+        document.querySelectorAll('.sev-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.sev-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedSeverity = parseInt(btn.dataset.sev);
+            });
+        });
+    }
+
+    // ── Layer Control Buttons ─────────────────────────────────────
+    function setupLayerControlButtons() {
+        const layerMap = {
+            dark: () => darkLayer,
+            light: () => lightLayer,
+            satellite: () => satLayer,
+            streets: () => streetLayer,
         };
 
-        global.submitReport = async function () {
-            const city = CITIES[currentCity];
-            const payload = {
-                reportType: document.getElementById('report-type').value,
-                severity: selectedSeverity,
-                latitude: global._reportLat || city.lat,
-                longitude: global._reportLon || city.lon,
-                description: document.getElementById('report-description').value,
-                affectedRoad: currentCity + ' — zona reportada',
-            };
+        document.querySelectorAll('.layer-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const key = btn.dataset.tile;
+                const newLayer = layerMap[key] ? layerMap[key]() : darkLayer;
 
-            try {
-                const res = await fetch(`${API_BASE}/reports`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                if (res.ok) {
-                    showToast('✅ Reporte enviado — ¡Gracias!');
-                    VoiceEngine.speak('Reporte enviado. Gracias por ayudar a la comunidad.');
-                } else {
-                    showToast('❌ Error al enviar reporte');
+                if (!newLayer) return;
+
+                // Remove old active layer
+                if (activeLayer && map.hasLayer(activeLayer)) {
+                    map.removeLayer(activeLayer);
                 }
-            } catch {
-                showToast('📴 Sin conexión — reporte guardado localmente');
-            }
+
+                // Add new layer and update state
+                newLayer.addTo(map);
+                activeLayer = newLayer;
+
+                // Update button active state
+                document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const labels = { dark: '🌑 Modo Oscuro', light: '☀️ Modo Claro', satellite: '🛰️ Satélite', streets: '🗺️ Calles' };
+                showToast(labels[key] || 'Mapa cambiado');
+            });
+        });
+    }
+
+    // ── Report Modal ─────────────────────────────────────────────
+    global.openReportModal = function () {
+        document.getElementById('report-modal').style.display = 'flex';
+    };
+
+    global.closeReportModal = function (e) {
+        if (!e || e.target.id === 'report-modal' || !e.target.closest) {
             document.getElementById('report-modal').style.display = 'none';
-            document.getElementById('report-description').value = '';
-        };
-
-        // ── Toast ────────────────────────────────────────────────────
-        let toastTimer;
-        global.showToast = function (msg) {
-            const toast = document.getElementById('toast');
-            if (!toast) return;
-            toast.textContent = msg;
-            toast.classList.add('show');
-            clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
-        };
-
-        // ── Fallback Landmark Data (offline / API unavailable) ───────
-        const FALLBACK_LANDMARKS = [
-            // ── MALABO (Bioko Norte) ──────────────────────────────
-            { id: 1, name: 'Estadio de Malabo', category: 'estadio', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7550, longitude: 8.7900, addressHint: 'Carretera de Luba', importance: 10, verified: true },
-            { id: 2, name: 'Gasolinera Total Ela Nguema', category: 'gasolinera', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7490, longitude: 8.7720, addressHint: 'Barrio Ela Nguema', importance: 9, verified: true },
-            { id: 3, name: 'Hospital Regional de Malabo', category: 'hospital', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7520, longitude: 8.7860, addressHint: 'Barrio Ela Nguema', importance: 10, verified: true },
-            { id: 4, name: 'Catedral de Santa Isabel', category: 'iglesia', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7502, longitude: 8.7838, addressHint: 'Plaza de la Independencia', importance: 10, verified: true },
-            { id: 5, name: 'Palacio Presidencial', category: 'gobierno', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7500, longitude: 8.7833, addressHint: 'Paseo de los Cocoteros', importance: 10, verified: true },
-            { id: 6, name: 'Aeropuerto de Malabo (SGSN)', category: 'aeropuerto', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7553, longitude: 8.7087, addressHint: 'Carretera del Aeropuerto', importance: 10, verified: true },
-            { id: 7, name: 'Puerto de Malabo', category: 'puerto', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7475, longitude: 8.7880, addressHint: 'Zona Portuaria', importance: 10, verified: true },
-            { id: 8, name: 'Mercado Central de Malabo', category: 'mercado', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7508, longitude: 8.7843, addressHint: 'Barrio Centro', importance: 9, verified: true },
-            { id: 9, name: 'BGFI Bank Malabo', category: 'banco', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7502, longitude: 8.7840, addressHint: 'Av. de la Independencia', importance: 8, verified: true },
-            { id: 10, name: 'Playa de Sipopo', category: 'otro', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7850, longitude: 8.7550, addressHint: 'Complejo Sipopo', importance: 9, verified: true },
-            { id: 11, name: 'Ministerio de Obras Públicas', category: 'gobierno', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7510, longitude: 8.7845, addressHint: 'Centro de Malabo', importance: 8, verified: true },
-            // ── BATA (Litoral) ────────────────────────────────────
-            { id: 20, name: 'Estadio de Bata', category: 'estadio', city: 'Bata', region: 'Litoral', latitude: 1.8600, longitude: 9.7750, addressHint: 'Zona Estadio, Bata', importance: 10, verified: true },
-            { id: 21, name: 'Hospital Regional de Bata', category: 'hospital', city: 'Bata', region: 'Litoral', latitude: 1.8650, longitude: 9.7680, addressHint: 'Barrio Comandachina', importance: 10, verified: true },
-            { id: 22, name: 'Puerto de Bata', category: 'puerto', city: 'Bata', region: 'Litoral', latitude: 1.8610, longitude: 9.7640, addressHint: 'Zona Portuaria, Bata', importance: 10, verified: true },
-            { id: 23, name: 'Aeropuerto de Bata (SGBT)', category: 'aeropuerto', city: 'Bata', region: 'Litoral', latitude: 1.9048, longitude: 9.7756, addressHint: 'Carretera del Aeropuerto, Bata', importance: 10, verified: true },
-            { id: 24, name: 'AAUCA - Univ. de los Africanos', category: 'educacion', city: 'Bata', region: 'Litoral', latitude: 1.8650, longitude: 9.7550, addressHint: 'Campus Universitario, Bata', importance: 10, verified: true },
-            { id: 25, name: 'Mercado Central de Bata', category: 'mercado', city: 'Bata', region: 'Litoral', latitude: 1.8630, longitude: 9.7670, addressHint: 'Barrio Centro, Bata', importance: 9, verified: true },
-            { id: 26, name: 'Gasolinera Puma Bata', category: 'gasolinera', city: 'Bata', region: 'Litoral', latitude: 1.8640, longitude: 9.7700, addressHint: 'Avenida Principal Bata', importance: 8, verified: true },
-            { id: 27, name: 'Catedral de Bata', category: 'iglesia', city: 'Bata', region: 'Litoral', latitude: 1.8625, longitude: 9.7685, addressHint: 'Centro Bata', importance: 9, verified: true },
-            // ── MONGOMO (Wele-Nzas) ───────────────────────────────
-            { id: 40, name: 'Hotel Basílica Mongomo', category: 'hotel', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6268, longitude: 10.9933, addressHint: 'Centro de Mongomo', importance: 10, verified: true },
-            { id: 41, name: 'Basílica de la Inmaculada Concepción', category: 'iglesia', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6259, longitude: 10.9925, addressHint: 'Mongomo', importance: 10, verified: true },
-            { id: 42, name: 'Hospital de Mongomo', category: 'hospital', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6275, longitude: 10.9950, addressHint: 'Barrio Central, Mongomo', importance: 9, verified: true },
-            { id: 43, name: 'Mercado de Mongomo', category: 'mercado', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6270, longitude: 10.9942, addressHint: 'Centro comercial, Mongomo', importance: 8, verified: true },
-            // ── DJIBLOHO / OYALA (Ciudad de la Paz) ──────────────
-            { id: 50, name: 'Grand Hotel Djibloho', category: 'hotel', city: 'Djibloho', region: 'Centro Sur', latitude: 1.6170, longitude: 11.3220, addressHint: 'Parque Nacional Monte Alén, Djibloho', importance: 10, verified: true },
-            { id: 51, name: 'Palacio de Congresos Djibloho', category: 'gobierno', city: 'Djibloho', region: 'Centro Sur', latitude: 1.6165, longitude: 11.3215, addressHint: 'Djibloho / Oyala', importance: 10, verified: true },
-            { id: 52, name: 'Ciudad de la Paz (Oyala)', category: 'gobierno', city: 'Djibloho', region: 'Centro Sur', latitude: 1.6155, longitude: 11.3200, addressHint: 'Nueva Capital, Centro Sur', importance: 10, verified: true },
-            // ── EBEBIYIN ──────────────────────────────────────────
-            { id: 60, name: 'Hospital de Ebebiyín', category: 'hospital', city: 'Ebebiyin', region: 'Kié-Ntem', latitude: 2.1500, longitude: 11.3333, addressHint: 'Ebebiyín, Kié-Ntem', importance: 9, verified: true },
-            { id: 61, name: 'Mercado de Ebebiyín', category: 'mercado', city: 'Ebebiyin', region: 'Kié-Ntem', latitude: 2.1510, longitude: 11.3340, addressHint: 'Centro, Ebebiyín', importance: 8, verified: true },
-        ];
-
-        // ── Boot ──────────────────────────────────────────────────────
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', init);
-        } else {
-            init();
         }
+    };
 
-    } (window));
+    global.submitReport = async function () {
+        const city = CITIES[currentCity];
+        const payload = {
+            reportType: document.getElementById('report-type').value,
+            severity: selectedSeverity,
+            latitude: global._reportLat || city.lat,
+            longitude: global._reportLon || city.lon,
+            description: document.getElementById('report-description').value,
+            affectedRoad: currentCity + ' — zona reportada',
+        };
+
+        try {
+            const res = await fetch(`${API_BASE}/reports`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+                showToast('✅ Reporte enviado — ¡Gracias!');
+                VoiceEngine.speak('Reporte enviado. Gracias por ayudar a la comunidad.');
+            } else {
+                showToast('❌ Error al enviar reporte');
+            }
+        } catch {
+            showToast('📴 Sin conexión — reporte guardado localmente');
+        }
+        document.getElementById('report-modal').style.display = 'none';
+        document.getElementById('report-description').value = '';
+    };
+
+    // ── Toast ────────────────────────────────────────────────────
+    let toastTimer;
+    global.showToast = function (msg) {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+    };
+
+    // ── Fallback Landmark Data (offline / API unavailable) ───────
+    const FALLBACK_LANDMARKS = [
+        // ── MALABO (Bioko Norte) ──────────────────────────────
+        { id: 1, name: 'Estadio de Malabo', category: 'estadio', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7550, longitude: 8.7900, addressHint: 'Carretera de Luba', importance: 10, verified: true },
+        { id: 2, name: 'Gasolinera Total Ela Nguema', category: 'gasolinera', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7490, longitude: 8.7720, addressHint: 'Barrio Ela Nguema', importance: 9, verified: true },
+        { id: 3, name: 'Hospital Regional de Malabo', category: 'hospital', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7520, longitude: 8.7860, addressHint: 'Barrio Ela Nguema', importance: 10, verified: true },
+        { id: 4, name: 'Catedral de Santa Isabel', category: 'iglesia', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7502, longitude: 8.7838, addressHint: 'Plaza de la Independencia', importance: 10, verified: true },
+        { id: 5, name: 'Palacio Presidencial', category: 'gobierno', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7500, longitude: 8.7833, addressHint: 'Paseo de los Cocoteros', importance: 10, verified: true },
+        { id: 6, name: 'Aeropuerto de Malabo (SGSN)', category: 'aeropuerto', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7553, longitude: 8.7087, addressHint: 'Carretera del Aeropuerto', importance: 10, verified: true },
+        { id: 7, name: 'Puerto de Malabo', category: 'puerto', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7475, longitude: 8.7880, addressHint: 'Zona Portuaria', importance: 10, verified: true },
+        { id: 8, name: 'Mercado Central de Malabo', category: 'mercado', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7508, longitude: 8.7843, addressHint: 'Barrio Centro', importance: 9, verified: true },
+        { id: 9, name: 'BGFI Bank Malabo', category: 'banco', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7502, longitude: 8.7840, addressHint: 'Av. de la Independencia', importance: 8, verified: true },
+        { id: 10, name: 'Playa de Sipopo', category: 'otro', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7850, longitude: 8.7550, addressHint: 'Complejo Sipopo', importance: 9, verified: true },
+        { id: 11, name: 'Ministerio de Obras Públicas', category: 'gobierno', city: 'Malabo', region: 'Bioko Norte', latitude: 3.7510, longitude: 8.7845, addressHint: 'Centro de Malabo', importance: 8, verified: true },
+        // ── BATA (Litoral) ────────────────────────────────────
+        { id: 20, name: 'Estadio de Bata', category: 'estadio', city: 'Bata', region: 'Litoral', latitude: 1.8600, longitude: 9.7750, addressHint: 'Zona Estadio, Bata', importance: 10, verified: true },
+        { id: 21, name: 'Hospital Regional de Bata', category: 'hospital', city: 'Bata', region: 'Litoral', latitude: 1.8650, longitude: 9.7680, addressHint: 'Barrio Comandachina', importance: 10, verified: true },
+        { id: 22, name: 'Puerto de Bata', category: 'puerto', city: 'Bata', region: 'Litoral', latitude: 1.8610, longitude: 9.7640, addressHint: 'Zona Portuaria, Bata', importance: 10, verified: true },
+        { id: 23, name: 'Aeropuerto de Bata (SGBT)', category: 'aeropuerto', city: 'Bata', region: 'Litoral', latitude: 1.9048, longitude: 9.7756, addressHint: 'Carretera del Aeropuerto, Bata', importance: 10, verified: true },
+        { id: 24, name: 'AAUCA - Univ. de los Africanos', category: 'educacion', city: 'Bata', region: 'Litoral', latitude: 1.8650, longitude: 9.7550, addressHint: 'Campus Universitario, Bata', importance: 10, verified: true },
+        { id: 25, name: 'Mercado Central de Bata', category: 'mercado', city: 'Bata', region: 'Litoral', latitude: 1.8630, longitude: 9.7670, addressHint: 'Barrio Centro, Bata', importance: 9, verified: true },
+        { id: 26, name: 'Gasolinera Puma Bata', category: 'gasolinera', city: 'Bata', region: 'Litoral', latitude: 1.8640, longitude: 9.7700, addressHint: 'Avenida Principal Bata', importance: 8, verified: true },
+        { id: 27, name: 'Catedral de Bata', category: 'iglesia', city: 'Bata', region: 'Litoral', latitude: 1.8625, longitude: 9.7685, addressHint: 'Centro Bata', importance: 9, verified: true },
+        // ── MONGOMO (Wele-Nzas) ───────────────────────────────
+        { id: 40, name: 'Hotel Basílica Mongomo', category: 'hotel', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6268, longitude: 10.9933, addressHint: 'Centro de Mongomo', importance: 10, verified: true },
+        { id: 41, name: 'Basílica de la Inmaculada Concepción', category: 'iglesia', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6259, longitude: 10.9925, addressHint: 'Mongomo', importance: 10, verified: true },
+        { id: 42, name: 'Hospital de Mongomo', category: 'hospital', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6275, longitude: 10.9950, addressHint: 'Barrio Central, Mongomo', importance: 9, verified: true },
+        { id: 43, name: 'Mercado de Mongomo', category: 'mercado', city: 'Mongomo', region: 'Wele-Nzas', latitude: 1.6270, longitude: 10.9942, addressHint: 'Centro comercial, Mongomo', importance: 8, verified: true },
+        // ── DJIBLOHO / OYALA (Ciudad de la Paz) ──────────────
+        { id: 50, name: 'Grand Hotel Djibloho', category: 'hotel', city: 'Djibloho', region: 'Centro Sur', latitude: 1.6170, longitude: 11.3220, addressHint: 'Parque Nacional Monte Alén, Djibloho', importance: 10, verified: true },
+        { id: 51, name: 'Palacio de Congresos Djibloho', category: 'gobierno', city: 'Djibloho', region: 'Centro Sur', latitude: 1.6165, longitude: 11.3215, addressHint: 'Djibloho / Oyala', importance: 10, verified: true },
+        { id: 52, name: 'Ciudad de la Paz (Oyala)', category: 'gobierno', city: 'Djibloho', region: 'Centro Sur', latitude: 1.6155, longitude: 11.3200, addressHint: 'Nueva Capital, Centro Sur', importance: 10, verified: true },
+        // ── EBEBIYIN ──────────────────────────────────────────
+        { id: 60, name: 'Hospital de Ebebiyín', category: 'hospital', city: 'Ebebiyin', region: 'Kié-Ntem', latitude: 2.1500, longitude: 11.3333, addressHint: 'Ebebiyín, Kié-Ntem', importance: 9, verified: true },
+        { id: 61, name: 'Mercado de Ebebiyín', category: 'mercado', city: 'Ebebiyin', region: 'Kié-Ntem', latitude: 2.1510, longitude: 11.3340, addressHint: 'Centro, Ebebiyín', importance: 8, verified: true },
+    ];
+
+    // ── Boot ──────────────────────────────────────────────────────
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+}(window));
