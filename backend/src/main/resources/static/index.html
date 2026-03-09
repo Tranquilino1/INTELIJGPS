@@ -105,18 +105,18 @@
                     <div class="ai-name">INTELI</div>
                     <div class="ai-status" id="ai-status-dot"><span class="status-pulse"></span> Asistente activo</div>
                 </div>
+                <button class="ai-close-btn" onclick="toggleAISetup()" title="Configurar clave API">⚙️</button>
                 <button class="ai-close-btn" onclick="toggleAI()">✕</button>
             </div>
 
-            <!-- API Key Setup (shown only if no key saved) -->
+            <!-- API Key Setup (toggleable) -->
             <div class="ai-setup" id="ai-setup">
-                <p class="ai-setup-text">Ingresa tu API Key de <strong>Google Gemini</strong> para activar el asistente
-                    de IA en vivo.</p>
+                <p class="ai-setup-text">Pega tu <strong>API Key de Google Gemini</strong> y pulsa Activar.</p>
                 <div class="ai-key-input-wrap">
-                    <input type="password" id="ai-api-key" placeholder="AIza..." />
+                    <input type="text" id="ai-api-key" placeholder="AIzaSy..." />
                     <button onclick="saveGeminiKey()">Activar</button>
                 </div>
-                <p class="ai-setup-hint">Consigue tu clave gratis en <a href="https://aistudio.google.com/apikey"
+                <p class="ai-setup-hint">Clave gratuita en <a href="https://aistudio.google.com/apikey"
                         target="_blank">aistudio.google.com</a></p>
             </div>
 

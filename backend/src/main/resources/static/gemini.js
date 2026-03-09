@@ -253,7 +253,27 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         panel.classList.toggle('open', !isOpen);
         const btn = document.getElementById('btn-ai-toggle');
         if (btn) btn.classList.toggle('active', !isOpen);
+
+        // If opening and no API key saved → show setup by default
+        if (!isOpen && !apiKey) {
+            const setup = document.getElementById('ai-setup');
+            if (setup) setup.style.display = 'block';
+        }
     }
+
+    // Toggle API key setup section (gear button)
+    global.toggleAISetup = function () {
+        const setup = document.getElementById('ai-setup');
+        if (!setup) return;
+        const visible = setup.style.display !== 'none';
+        setup.style.display = visible ? 'none' : 'block';
+        if (!visible) {
+            // Pre-fill with existing key if any
+            const input = document.getElementById('ai-api-key');
+            if (input && apiKey) input.value = apiKey;
+            input && input.focus();
+        }
+    };
 
     // ── Public API ──────────────────────────────────────────────────
     global.saveGeminiKey = saveGeminiKey;
