@@ -6,7 +6,7 @@
 (function (global) {
     'use strict';
 
-    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
     const STORAGE_KEY = 'intelijgps_gemini_key';
 
     let apiKey = null;
@@ -98,13 +98,14 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         chatHistory.push({ role: 'user', parts: [{ text: userMessage }] });
 
         const payload = {
-            contents: [
-                { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-                ...chatHistory
-            ],
+            // systemInstruction is the correct way to pass a system prompt
+            systemInstruction: {
+                parts: [{ text: SYSTEM_PROMPT }]
+            },
+            contents: chatHistory,
             generationConfig: {
                 temperature: 0.7,
-                maxOutputTokens: 200,
+                maxOutputTokens: 256,
             }
         };
 
@@ -115,12 +116,13 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         });
 
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error?.message || 'API Error');
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error?.message || `HTTP ${res.status}`);
         }
 
         const data = await res.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No pude generar una respuesta.';
+        // Gemini uses 'model' role for assistant replies
         chatHistory.push({ role: 'model', parts: [{ text }] });
 
         // Keep history bounded
