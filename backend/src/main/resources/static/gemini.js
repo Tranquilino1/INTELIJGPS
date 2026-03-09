@@ -1,13 +1,14 @@
 /* ════════════════════════════════════════════════════════════════
-   INTELIJGPS — Grok AI Assistant Module (INTELI)
-   Integrates xAI Grok API for conversational navigation assistance
+   INTELIJGPS — Gemini AI Assistant Module (INTELI)
+   Integrates Google Gemini AI for conversational navigation assistance
    ════════════════════════════════════════════════════════════════ */
 
 (function (global) {
     'use strict';
 
-    const GROK_API_BASE = 'https://api.x.ai/v1/chat/completions';
-    const STORAGE_KEY = 'intelijgps_grok_key';
+    // Using gemini-pro (Gemini 3 context)
+    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+    const STORAGE_KEY = 'intelijgps_gemini_key';
 
     let apiKey = null;
     let chatHistory = [];
@@ -49,35 +50,28 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         if (setup) setup.style.display = 'none';
     }
 
-    async function saveGrokKey() {
+    async function saveGeminiKey() {
         const input = document.getElementById('ai-api-key');
         const key = input ? input.value.trim() : '';
-        if (!key || !key.startsWith('xai-')) {
-            showAIToast('❌ Clave no válida. Debe comenzar con "xai-"');
+        if (!key || !key.startsWith('AIza')) {
+            showAIToast('❌ Clave no válida. Debe comenzar con "AIza"');
             return;
         }
         apiKey = key;
         localStorage.setItem(STORAGE_KEY, key);
 
         // Test connection immediately
-        appendAIMessage('assistant', '⏳ Verificando clave con xAI (Grok)...');
+        appendAIMessage('assistant', '⏳ Verificando clave con Google...');
         showChatUI();
 
         try {
             const testPayload = {
-                model: "grok-beta",
-                messages: [
-                    { role: "system", content: "You are a test assistant." },
-                    { role: "user", content: "Hola" }
-                ],
-                max_tokens: 10
+                contents: [{ role: 'user', parts: [{ text: 'Hola' }] }],
+                generationConfig: { maxOutputTokens: 10 }
             };
-            const res = await fetch(GROK_API_BASE, {
+            const res = await fetch(`${GEMINI_API_BASE}?key=${key}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${key}`
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(testPayload)
             });
             if (!res.ok) {
@@ -85,18 +79,18 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
                 const msg = err.error?.message || `HTTP ${res.status}`;
                 const container = document.getElementById('ai-messages');
                 if (container) container.lastChild?.remove(); // remove waiting msg
-                appendAIMessage('assistant', `❌ Error de xAI: ${msg}\n\nSolución: Genera una nueva clave en console.x.ai`);
+                appendAIMessage('assistant', `❌ Error de Google: ${msg}\n\nPosibles causas:\n- La clave fue compartida y está comprometida\n- La cuenta no tiene facturación activa en Google Cloud\n- La cuota diaria se agotó\n\nSolución: Genera una nueva clave en aistudio.google.com`);
                 return;
             }
             // success
             const container = document.getElementById('ai-messages');
             if (container) container.lastChild?.remove();
-            appendAIMessage('assistant', '✅ ¡Activado! Soy INTELI (Grok), tu asistente de navegación para Guinea Ecuatorial. ¿A dónde vamos hoy?');
+            appendAIMessage('assistant', '✅ ¡Activado! Soy INTELI, tu asistente de navegación para Guinea Ecuatorial. ¿A dónde vamos hoy?');
             showAIToast('🤖 Asistente INTELI activado!');
         } catch (e) {
             const container = document.getElementById('ai-messages');
             if (container) container.lastChild?.remove();
-            appendAIMessage('assistant', `❌ Sin conexión a Internet: ${e.message}`);
+            appendAIMessage('assistant', `❌ Sin conexión a Internet o CORS bloqueado: ${e.message}`);
         }
     }
 
@@ -108,7 +102,7 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         clearAIInput();
 
         if (!apiKey) {
-            appendAIMessage('assistant', '⚠️ Por favor activa el asistente ingresando tu API Key de Grok arriba.');
+            appendAIMessage('assistant', '⚠️ Por favor activa el asistente ingresando tu API Key de Gemini arriba.');
             return;
         }
 
@@ -116,7 +110,7 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
 
         try {
             handleNavigationIntent(userText);
-            const response = await callGrokAPI(userText);
+            const response = await callGeminiAPI(userText);
             appendAIMessage('assistant', response);
 
             if (global.VoiceEngine && global.VoiceEngine.isEnabled()) {
@@ -124,31 +118,27 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
             }
         } catch (err) {
             console.error('[INTELI] API Error:', err);
-            appendAIMessage('assistant', `⚠️ ${err.message || 'Error de conexión'}\n\n💡 Genera una nueva clave en console.x.ai y pulsa ⚙️ para actualizarla.`);
+            appendAIMessage('assistant', `⚠️ ${err.message || 'Error de conexión'}\n\n💡 Si dice "API key not valid", genera una nueva clave en aistudio.google.com/apikey y pulsa ⚙️ para actualizarla.`);
         } finally {
             setAILoading(false);
         }
     }
 
-    async function callGrokAPI(userMessage) {
-        chatHistory.push({ role: 'user', content: userMessage });
+    async function callGeminiAPI(userMessage) {
+        chatHistory.push({ role: 'user', parts: [{ text: userMessage }] });
 
+        // En gemini-pro el system prompt se simula o inyecta. Usaremos el rol de modelo primero si es necesario,
+        // o inyectaremos el prompt del sistema como primer mensaje del usuario si falla nativamente.
+        // Pero intentamos el formato oficial `systemInstruction` de la v1beta.
         const payload = {
-            model: "grok-beta",
-            messages: [
-                { role: "system", content: SYSTEM_PROMPT },
-                ...chatHistory
-            ],
-            temperature: 0.7,
-            max_tokens: 256
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: chatHistory,
+            generationConfig: { temperature: 0.7, maxOutputTokens: 256 }
         };
 
-        const res = await fetch(GROK_API_BASE, {
+        const res = await fetch(`${GEMINI_API_BASE}?key=${apiKey}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
@@ -159,8 +149,8 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         }
 
         const data = await res.json();
-        const text = data.choices?.[0]?.message?.content || 'No pude generar una respuesta.';
-        chatHistory.push({ role: 'assistant', content: text });
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No pude generar una respuesta.';
+        chatHistory.push({ role: 'model', parts: [{ text }] });
         if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
         return text;
     }
@@ -310,7 +300,7 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
     };
 
     // ── Public API ──────────────────────────────────────────────────
-    global.saveGrokKey = saveGrokKey;
+    global.saveGeminiKey = saveGeminiKey;
     global.sendAIMessage = () => {
         const input = document.getElementById('ai-input');
         if (input) sendMessage(input.value);
