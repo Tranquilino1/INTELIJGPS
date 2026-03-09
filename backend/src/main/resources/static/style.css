@@ -1289,10 +1289,6 @@ body {
   z-index: 900;
   transition: var(--spring);
   box-shadow: 0 8px 24px rgba(108, 99, 255, 0.35);
-  position: fixed !important;
-  bottom: 90px;
-  left: 16px;
-  position: absolute;
 }
 
 .fab-ai svg {
@@ -1696,4 +1692,175 @@ body {
     width: auto;
     bottom: 80px;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INTELIJGPS v2.1 — Design Polish Fixes
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Search Clear Button ─────────────────────────────────────── */
+.search-clear {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.search-clear.visible {
+  display: flex;
+}
+
+.search-clear:hover {
+  background: rgba(255, 71, 87, 0.25);
+  color: #ff4757;
+}
+
+/* ── Search Box Alignment Fix ────────────────────────────────── */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Brand Panel Spacing ─────────────────────────────────────── */
+.panel-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.brand-flag {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.brand-text {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Panel Left Sections ─────────────────────────────────────── */
+.panel-content {
+  padding: 12px 14px 8px;
+}
+
+.city-switcher-container {
+  padding: 8px 14px 14px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.city-switcher-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* ── Voice Mic Wave Icon Fix ─────────────────────────────────── */
+.voice-mic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.voice-mic .wave-icon {
+  width: 22px;
+  height: 22px;
+  stroke: white;
+  stroke-width: 2.5px;
+}
+
+/* ── Voice Bubble Text ───────────────────────────────────────── */
+.voice-bubble {
+  flex: 1;
+  overflow: hidden;
+}
+
+.voice-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+/* ── Layer Control Panel Icon Sizing ─────────────────────────── */
+.layer-btn {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* ── FAB Buttons Correct Stacking ────────────────────────────── */
+.fab-locate {
+  position: absolute;
+  bottom: 160px;
+  left: 16px;
+  z-index: 900;
+}
+
+.fab-ai {
+  position: absolute;
+  bottom: 100px;
+  left: 16px;
+  z-index: 900;
+}
+
+.fab {
+  position: absolute;
+  bottom: 100px;
+  right: 16px;
+  z-index: 900;
+}
+
+/* ── AI Panel Better Position ────────────────────────────────── */
+.ai-panel {
+  bottom: 100px;
+  left: 74px;
+}
+
+/* ── Quick Chips Line Height ─────────────────────────────────── */
+.chip {
+  line-height: 1.3;
+}
+
+/* ── Search Results Z-index ──────────────────────────────────── */
+.search-results {
+  z-index: 1100;
+}
+
+/* ── Modal Overlay Fix ───────────────────────────────────────── */
+.modal-overlay {
+  z-index: 2000;
+}
+
+/* ── Wave Icon in AI Voice Button ───────────────────────────── */
+.ai-voice-btn .wave-icon {
+  width: 18px;
+  height: 18px;
+  stroke: var(--verde-selva);
 }
