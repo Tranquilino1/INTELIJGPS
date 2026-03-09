@@ -10,7 +10,7 @@
     const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
     const STORAGE_KEY = 'intelijgps_gemini_key';
 
-    let apiKey = null;
+    let apiKey = 'AIzaSyCtbDhrFhUV0Ag2nsdyl9RqEisvS7prKlY';
     let chatHistory = [];
     let isListening = false;
     let recognition = null;
