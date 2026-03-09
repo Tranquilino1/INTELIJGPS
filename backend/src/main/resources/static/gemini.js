@@ -47,7 +47,7 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         if (setup) setup.style.display = 'none';
     }
 
-    function saveGeminiKey() {
+    async function saveGeminiKey() {
         const input = document.getElementById('ai-api-key');
         const key = input ? input.value.trim() : '';
         if (!key || !key.startsWith('AIza')) {
@@ -56,9 +56,39 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         }
         apiKey = key;
         localStorage.setItem(STORAGE_KEY, key);
+
+        // Test connection immediately
+        appendAIMessage('assistant', '⏳ Verificando clave con Google...');
         showChatUI();
-        appendAIMessage('assistant', '✅ ¡Activado! Soy INTELI, tu asistente de navegación para Guinea Ecuatorial. ¿A dónde vamos hoy?');
-        showAIToast('🤖 Asistente INTELI activado!');
+
+        try {
+            const testPayload = {
+                contents: [{ role: 'user', parts: [{ text: 'Hola' }] }],
+                generationConfig: { maxOutputTokens: 10 }
+            };
+            const res = await fetch(`${GEMINI_API_BASE}?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testPayload)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                const msg = err.error?.message || `HTTP ${res.status}`;
+                const container = document.getElementById('ai-messages');
+                if (container) container.lastChild?.remove(); // remove waiting msg
+                appendAIMessage('assistant', `❌ Error de Google: ${msg}\n\nPosibles causas:\n- La clave fue compartida y está comprometida\n- La cuenta no tiene facturación activa en Google Cloud\n- La cuota diaria se agotó\n\nSolución: Genera una nueva clave en aistudio.google.com`);
+                return;
+            }
+            // success
+            const container = document.getElementById('ai-messages');
+            if (container) container.lastChild?.remove();
+            appendAIMessage('assistant', '✅ ¡Activado! Soy INTELI, tu asistente de navegación para Guinea Ecuatorial. ¿A dónde vamos hoy?');
+            showAIToast('🤖 Asistente INTELI activado!');
+        } catch (e) {
+            const container = document.getElementById('ai-messages');
+            if (container) container.lastChild?.remove();
+            appendAIMessage('assistant', `❌ Sin conexión a Internet o CORS bloqueado: ${e.message}`);
+        }
     }
 
     // ── Chat ────────────────────────────────────────────────────────
@@ -82,13 +112,13 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
             const response = await callGeminiAPI(userText);
             appendAIMessage('assistant', response);
 
-            // Speak the response using VoiceEngine
             if (global.VoiceEngine && global.VoiceEngine.isEnabled()) {
                 global.VoiceEngine.speak(response);
             }
         } catch (err) {
             console.error('[INTELI] API Error:', err);
-            appendAIMessage('assistant', '⚠️ No pude contactar con el servidor. Verifica tu conexión o tu API Key.');
+            // Show the real error message from Google, not a generic one
+            appendAIMessage('assistant', `⚠️ ${err.message || 'Error de conexión'}\n\n💡 Si dice "API key not valid", genera una nueva clave en aistudio.google.com/apikey y pulsa ⚙️ para actualizarla.`);
         } finally {
             setAILoading(false);
         }
@@ -98,15 +128,9 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         chatHistory.push({ role: 'user', parts: [{ text: userMessage }] });
 
         const payload = {
-            // systemInstruction is the correct way to pass a system prompt
-            systemInstruction: {
-                parts: [{ text: SYSTEM_PROMPT }]
-            },
+            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
             contents: chatHistory,
-            generationConfig: {
-                temperature: 0.7,
-                maxOutputTokens: 256,
-            }
+            generationConfig: { temperature: 0.7, maxOutputTokens: 256 }
         };
 
         const res = await fetch(`${GEMINI_API_BASE}?key=${apiKey}`, {
@@ -117,17 +141,15 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
 
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.error?.message || `HTTP ${res.status}`);
+            const msg = err.error?.message || `HTTP ${res.status}`;
+            // Show specific Google error to help the user
+            throw new Error(msg);
         }
 
         const data = await res.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No pude generar una respuesta.';
-        // Gemini uses 'model' role for assistant replies
         chatHistory.push({ role: 'model', parts: [{ text }] });
-
-        // Keep history bounded
         if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
-
         return text;
     }
 
