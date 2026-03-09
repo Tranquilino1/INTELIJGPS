@@ -35,7 +35,9 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
 
     // ── Init ────────────────────────────────────────────────────────
     function init() {
-        apiKey = localStorage.getItem(STORAGE_KEY);
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) apiKey = saved;
+
         if (apiKey) {
             showChatUI();
         }
@@ -63,7 +65,7 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
 
         try {
             const testPayload = {
-                model: "grok-2",
+                model: "grok-beta",
                 messages: [
                     { role: "system", content: "You are a test assistant." },
                     { role: "user", content: "Hola" }
@@ -132,7 +134,7 @@ Responde SIEMPRE en español. Máximo 3 frases por respuesta.`;
         chatHistory.push({ role: 'user', content: userMessage });
 
         const payload = {
-            model: "grok-2",
+            model: "grok-beta",
             messages: [
                 { role: "system", content: SYSTEM_PROMPT },
                 ...chatHistory

@@ -3,9 +3,18 @@
 --  Guinea Ecuatorial Navigation Platform
 -- ============================================================
 
--- Enable PostGIS extension
-CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS postgis_topology;
+-- Enable PostGIS extension (wrapped for Railway compatibility)
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS postgis;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'PostGIS not available: %. Spatial features may be limited.', SQLERRM;
+END $$;
+
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS postgis_topology;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'PostGIS topology not available: %.', SQLERRM;
+END $$;
 
 -- ─── Cultural Landmarks (Hitos Culturales) ────────────────────────────────
 CREATE TABLE cultural_landmarks (
