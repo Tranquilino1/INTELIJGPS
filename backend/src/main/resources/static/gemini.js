@@ -6,7 +6,7 @@
 (function (global) {
     'use strict';
 
-    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
     const STORAGE_KEY = 'intelijgps_gemini_key';
 
     let apiKey = null;
